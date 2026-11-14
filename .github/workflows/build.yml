@@ -1,0 +1,58 @@
+name: Build and deploy wedding invitation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - wedding-invitation.zip
+      - .github/workflows/build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Extract website ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f wedding-invitation.zip
+          mkdir -p extracted dist
+          unzip -q wedding-invitation.zip -d extracted
+          INDEX_FILE="$(find extracted -type f -name index.html -print -quit)"
+          if [ -z "$INDEX_FILE" ]; then
+            echo "ERROR: index.html was not found inside wedding-invitation.zip"
+            exit 1
+          fi
+          WEBSITE_DIR="$(dirname "$INDEX_FILE")"
+          cp -a "$WEBSITE_DIR"/. dist/
+          test -f dist/index.html
+          echo "Prepared website files:"
+          find dist -maxdepth 2 -type f -print
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
